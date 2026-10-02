@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="it" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Smart Invoice Importer - Modulo Contabile AI</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            yellow: '#F3C614',
+                            yellowHover: '#D9B00D',
+                            yellowLight: 'rgba(243, 198, 20, 0.15)',
+                            darkBg: '#121212',
+                            cardBg: '#1E1E1E',
+                            cardBorder: '#2A2A2A',
+                            inputBg: '#282828'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #121212;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #F3C614;
+        }
+        .yellow-glow {
+            box-shadow: 0 0 15px rgba(243, 198, 20, 0.2);
+        }
+        .yellow-border-glow:focus-within {
+            box-shadow: 0 0 0 2px rgba(243, 198, 20, 0.4);
+        }
+        @keyframes pulse-subtle {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        .animate-pulse-subtle {
+            animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body class="bg-brand-darkBg text-gray-200 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-yellow selection:text-black">
+
+    <!-- Navigation Header -->
+    <header class="bg-brand-cardBg border-b border-brand-cardBorder sticky top-0 z-30 px-4 lg:px-8 py-3.5 shadow-md">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="w-9 h-9 rounded-lg bg-brand-yellow flex items-center justify-center text-black font-bold text-lg shadow-sm">
+                    <i class="fa-solid me-1 fa-file-invoice"></i>
+                </div>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <span class="font-bold text-lg tracking-tight text-white">SmartERP</span>
+                        <span class="bg-brand-yellowLight text-brand-yellow text-xs px-2 py-0.5 rounded font-mono font-medium border border-brand-yellow/30">AI IMPORTER v3.4</span>
+                    </div>
+                    <p class="text-xs text-gray-400 hidden sm:block">Modulo Contabile - Registrazione Automatica Prima Nota</p>
+                </div>
+            </div>
+
+            <!-- Stats Header Widget -->
+            <div class="flex items-center space-x-6 text-sm">
+                <div class="hidden md:flex items-center space-x-2 bg-brand-darkBg/60 px-3 py-1.5 rounded-lg border border-brand-cardBorder">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span class="text-xs text-gray-400">Connessione ERP:</span>
+                    <span class="text-xs font-semibold text-emerald-400">SAP S/4HANA (Online)</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button id="btn-reset-app" class="px-3 py-1.5 text-xs text-gray-400 hover:text-white bg-brand-cardBorder/50 hover:bg-brand-cardBorder rounded-lg transition-colors flex items-center gap-1.5">
+                        <i class="fa-solid fa-rotate"></i>
+                        <span>Reset Demo</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-6">
+
+        <!-- SECTION 1: UPLOAD & DEMO PRESETS -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Drag and Drop Box -->
+            <div class="lg:col-span-2 bg-brand-cardBg border border-brand-cardBorder rounded-xl p-6 relative overflow-hidden flex flex-col justify-between">
+                <div>
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-cloud-arrow-up text-brand-yellow"></i>
+                            Caricamento Documento
+                        </h2>
+                        <span class="text-xs text-gray-400">Formati supportati: PDF, XML (FatturaPA), P7M, JPG</span>
+                    </div>
+
+                    <div id="drop-zone" class="border-2 border-dashed border-gray-700 hover:border-brand-yellow rounded-xl p-8 text-center cursor-pointer transition-all duration-200 bg-brand-darkBg/40 hover:bg-brand-darkBg/80 group flex flex-col items-center justify-center min-h-[180px]">
+                        <input type="file" id="file-input" class="hidden" accept=".pdf,.xml,.p7m,.jpg,.png">
+                        <div class="w-14 h-14 rounded-full bg-brand-cardBorder group-hover:bg-brand-yellowLight text-gray-400 group-hover:text-brand-yellow flex items-center justify-center mb-3 transition-colors">
+                            <i class="fa-solid fa-file-pdf text-2xl"></i>
+                        </div>
+                        <p class="text-sm font-medium text-gray-200 group-hover:text-white">
+                            Trascina qui la tua fattura o <span class="text-brand-yellow underline underline-offset-2">sfoglia i file</span>
+                        </p>
+                        <p class="text-xs text-gray-500 mt-1">Dimensione massima: 10 MB per documento</p>
+                    </div>
+                </div>
+
+                <div class="mt-4 flex items-center justify-between text-xs text-gray-400 pt-3 border-t border-brand-cardBorder/50">
+                    <span class="flex items-center gap-1.5">
+                        <i class="fa-solid fa-shield-halved text-emerald-400"></i>
+                        Controllo CIG/CUP & Validazione SDI automatica
+                    </span>
+                    <span class="hidden sm:inline text-gray-500">Motore OCR Tesseract 5.0 + AI Parser v2</span>
+                </div>
+            </div>
+
+            <!-- Demo Samples Card -->
+            <div class="bg-brand-cardBg border border-brand-cardBorder rounded-xl p-6 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-folder-open text-brand-yellow"></i>
+                            Fatture di Esempio
+                        </h2>
+                        <span class="text-xs text-brand-yellow bg-brand-yellowLight px-2 py-0.5 rounded font-mono">1-Click Test</span>
+                    </div>
+                    <p class="text-xs text-gray-400 mb-4">Seleziona uno dei modelli preimpostati per testare la simulazione d'importazione immediata:</p>
+
+                    <div class="space-y-2.5">
+                        <button onclick="loadPreset('enel')" class="w-full text-left p-3 rounded-lg bg-brand-darkBg/60 hover:bg-brand-darkBg border border-brand-cardBorder hover:border-brand-yellow/50 transition-all flex items-center justify-between group">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-8 h-8 rounded bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold text-xs">
+                                    <i class="fa-solid fa-bolt"></i>
+                                </div>
+                                <div>
+                                    <div class="text-xs font-semibold text-gray-200 group-hover:text-brand-yellow transition-colors">Enel Energia SpA</div>
+                                    <div class="text-[11px] text-gray-400">Utenza Elettrica Sede - € 1.450,20</div>
+                                </div>
+                            </div>
+                            <span class="text-xs text-gray-400 group-hover:text-white"><i class="fa-solid fa-chevron-right"></i></span>
+                        </button>
+
+                        <button onclick="loadPreset('tech')" class="w-full text-left p-3 rounded-lg bg-brand-darkBg/60 hover:bg-brand-darkBg border border-brand-cardBorder hover:border-brand-yellow/50 transition-all flex items-center justify-between group">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-8 h-8 rounded bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold text-xs">
+                                    <i class="fa-solid fa-laptop-code"></i>
+                                </div>
+                                <div>
+                                    <div class="text-xs font-semibold text-gray-200 group-hover:text-brand-yellow transition-colors">TechSolutions S.r.l.</div>
+                                    <div class="text-[11px] text-gray-400">Consulenza IT Q3 - € 4.880,00</div>
+                                </div>
+                            </div>
+                            <span class="text-xs text-gray-400 group-hover:text-white"><i class="fa-solid fa-chevron-right"></i></span>
+                        </button>
+
+                        <button onclick="loadPreset('acciaio')" class="w-full text-left p-3 rounded-lg bg-brand-darkBg/60 hover:bg-brand-darkBg border border-brand-cardBorder hover:border-brand-yellow/50 transition-all flex items-center justify-between group">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-8 h-8 rounded bg-purple-500/10 text-purple-400 flex items-center justify-center font-bold text-xs">
+                                    <i class="fa-solid fa-industry"></i>
+                                </div>
+                                <div>
+                                    <div class="text-xs font-semibold text-gray-200 group-hover:text-brand-yellow transition-colors">Acciaierie Lombarde SpA</div>
+                                    <div class="text-[11px] text-gray-400">Acquisto Materie Prime - € 12.500,00</div>
+                                </div>
+                            </div>
+                            <span class="text-xs text-gray-400 group-hover:text-white"><i class="fa-solid fa-chevron-right"></i></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- OCR / PARSING PROGRESS STATE (Hidden by default) -->
+        <section id="analysis-loader" class="hidden bg-brand-cardBg border border-brand-yellow/30 rounded-xl p-8 text-center yellow-glow">
+            <div class="max-w-md mx-auto space-y-4">
+                <div class="w-12 h-12 border-4 border-brand-yellow border-t-transparent rounded-full animate-spin mx-auto"></div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white">Analisi OCR & Estrazione AI in corso...</h3>
+                    <p id="analysis-step" class="text-xs text-gray-400 mt-1">Riconoscimento layout e scansione P.IVA / Codice Fiscale...</p>
+                </div>
+                <div class="w-full bg-brand-darkBg rounded-full h-2 overflow-hidden border border-brand-cardBorder">
+                    <div id="progress-bar" class="bg-brand-yellow h-full transition-all duration-300 w-0"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2: DOCUMENT PREVIEW & EXTRACTED DATA -->
+        <section id="section-extracted" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Left Panel: Extracted Invoice Metadata Card -->
+            <div class="lg:col-span-5 bg-brand-cardBg border border-brand-cardBorder rounded-xl p-6 flex flex-col justify-between">
+                <div>
+                    <!-- Header with Confidence Score -->
+                    <div class="flex justify-between items-start mb-6">
+                        <div>
+                            <span id="doc-type-badge" class="bg-blue-500/20 text-blue-400 text-[11px] font-semibold px-2.5 py-1 rounded border border-blue-500/30 tracking-wide uppercase">Fattura Passiva (Acquisto)</span>
+                            <h2 id="doc-supplier-name" class="text-xl font-bold text-white mt-2">Enel Energia SpA</h2>
+                            <p id="doc-supplier-vat" class="text-xs font-mono text-gray-400">P.IVA: IT01582611009</p>
+                        </div>
+                        <div class="text-right">
+                            <div class="inline-flex items-center space-x-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs px-2.5 py-1 rounded-full font-medium">
+                                <i class="fa-solid fa-brain"></i>
+                                <span id="doc-ai-confidence">AI Match: 98.4%</span>
+                            </div>
+                            <div class="text-[10px] text-gray-500 mt-1">Anagrafica ERP Match: <span id="supplier-match-status" class="text-emerald-400">Trovato (#F-0094)</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Key Metadata Fields -->
+                    <div class="grid grid-cols-2 gap-3 mb-6 bg-brand-darkBg/50 p-4 rounded-lg border border-brand-cardBorder">
+                        <div>
+                            <span class="text-[11px] uppercase tracking-wider text-gray-500 font-semibold block">N° Documento</span>
+                            <span id="meta-doc-num" class="text-sm font-mono font-medium text-white">FAT-2026-88912</span>
+                        </div>
+                        <div>
+                            <span class="text-[11px] uppercase tracking-wider text-gray-500 font-semibold block">Data Documento</span>
+                            <span id="meta-doc-date" class="text-sm font-mono font-medium text-white">24/09/2026</span>
+                        </div>
+                        <div>
+                            <span class="text-[11px] uppercase tracking-wider text-gray-500 font-semibold block">Scadenza Pagamento</span>
+                            <span id="meta-doc-due" class="text-sm font-mono font-medium text-amber-400">30/10/2026</span>
+                        </div>
+                        <div>
+                            <span class="text-[11px] uppercase tracking-wider text-gray-500 font-semibold block">Modalità Pagamento</span>
+                            <span id="meta-doc-paymode" class="text-sm font-mono font-medium text-white">Bonifico SEPA / RI.BA</span>
+                        </div>
+                    </div>
+
+                    <!-- Financial Summary Breakdown -->
+                    <div class="space-y-2 border-t border-brand-cardBorder pt-4">
+                        <div class="flex justify-between text-xs text-gray-400">
+                            <span>ImponibileTotale:</span>
+                            <span id="meta-net" class="font-mono text-gray-200">€ 1.188,69</span>
+                        </div>
+                        <div class="flex justify-between text-xs text-gray-400">
+                            <span>Imposta (IVA 22%):</span>
+                            <span id="meta-vat" class="font-mono text-gray-200">€ 261,51</span>
+                        </div>
+                        <div class="flex justify-between text-base font-bold text-white pt-2 border-t border-brand-cardBorder/50">
+                            <span>Totale Fattura:</span>
+                            <span id="meta-total" class="font-mono text-brand-yellow">€ 1.450,20</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Button Document View -->
+                <div class="mt-6 pt-4 border-t border-brand-cardBorder flex items-center justify-between">
+                    <button onclick="toggleOriginalPreview()" class="text-xs text-gray-400 hover:text-brand-yellow transition-colors flex items-center gap-1.5">
+                        <i class="fa-solid fa-eye"></i>
+                        <span>Mostra Documento Originale PDF</span>
+                    </button>
+                    <span class="text-[11px] text-gray-500">ID Flusso SDI: <code id="meta-sdi-id" class="text-gray-400 font-mono">SDI-99382104</code></span>
+                </div>
+            </div>
+
+            <!-- Right Panel: Prima Nota Accounting Proposal Matrix -->
+            <div class="lg:col-span-7 bg-brand-cardBg border border-brand-cardBorder rounded-xl p-6 flex flex-col justify-between">
+                <div>
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                        <div>
+                            <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-list-check text-brand-yellow"></i>
+                                Proposta Registrazione Prima Nota
+                            </h2>
+                            <p class="text-xs text-gray-400">Modifica direttamente i conti o i centri di costo se necessario</p>
+                        </div>
+                        
+                        <!-- Balance Status Indicator -->
+                        <div id="balance-badge" class="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 self-start sm:self-auto">
+                            <i class="fa-solid fa-circle-check"></i>
+                            <span>Quadratura OK (€ 0,00)</span>
+                        </div>
+                    </div>
+
+                    <!-- Editable Accounting Entries Table -->
+                    <div class="overflow-x-auto rounded-lg border border-brand-cardBorder bg-brand-darkBg/60">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-brand-cardBorder/40 text-gray-400 font-semibold border-b border-brand-cardBorder uppercase tracking-wider text-[10px]">
+                                <tr>
+                                    <th class="p-2.5">Cod. Conto</th>
+                                    <th class="p-2.5">Descrizione Conto</th>
+                                    <th class="p-2.5">C. Cinto / Commessa</th>
+                                    <th class="p-2.5 text-right">DARE (€)</th>
+                                    <th class="p-2.5 text-right">AVERE (€)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="entries-table-body" class="divide-y divide-brand-cardBorder/50 text-gray-300 font-mono">
+                                <!-- Dynamic rows inserted by JS -->
+                            </tbody>
+                            <tfoot class="bg-brand-cardBg/90 font-bold border-t border-brand-cardBorder text-xs">
+                                <tr>
+                                    <td colspan="3" class="p-2.5 text-right text-gray-400">Totali Sezioni:</td>
+                                    <td id="table-total-dare" class="p-2.5 text-right text-emerald-400 font-mono">€ 1.450,20</td>
+                                    <td id="table-total-avere" class="p-2.5 text-right text-emerald-400 font-mono">€ 1.450,20</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    <!-- AI Accounting Rationale Note -->
+                    <div class="mt-4 p-3 bg-brand-yellowLight/50 border border-brand-yellow/30 rounded-lg text-xs flex items-start space-x-2.5">
+                        <i class="fa-solid fa-lightbulb text-brand-yellow mt-0.5 text-sm"></i>
+                        <div class="text-gray-300">
+                            <span class="font-semibold text-brand-yellow">Suggerimento AI:</span> 
+                            <span id="ai-suggestion-text">I costi energetici sono stati attribuiti al Centro di Costo CDC-ADM (Amministrazione) sulla base dello storico delle fatture precedenti dello stesso fornitore.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 4: SUBMIT TO ERP BUTTON -->
+                <div class="mt-6 pt-4 border-t border-brand-cardBorder flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div class="flex items-center space-x-2 text-xs text-gray-400">
+                        <i class="fa-solid fa-database text-gray-500"></i>
+                        <span>Esercizio Contabile: <strong class="text-white">2026</strong></span>
+                        <span class="text-gray-600">|</span>
+                        <span>Sezionale: <strong class="text-white">ACQ-01</strong></span>
+                    </div>
+
+                    <button id="btn-submit-erp" onclick="submitToERP()" class="w-full sm:w-auto px-6 py-3 bg-brand-yellow hover:bg-brand-yellowHover text-black font-bold rounded-lg shadow-lg hover:shadow-brand-yellow/20 transition-all flex items-center justify-center space-x-2 text-sm">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        <span>INVIA REGISTRAZIONE A ERP</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 5: HISTORICAL ERP ENTRIES LOG -->
+        <section class="bg-brand-cardBg border border-brand-cardBorder rounded-xl p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-clock-rotate-left text-brand-yellow"></i>
+                        Storico Registrazioni Sessione Corrente
+                    </h2>
+                    <p class="text-xs text-gray-400">Elenco delle scritture contabili contabilizzate ed inviate con successo all'ERP</p>
+                </div>
+                <span id="log-count-badge" class="bg-brand-cardBorder text-gray-300 text-xs px-2.5 py-1 rounded-full font-mono">0 Documenti Elaborati</span>
+            </div>
+
+            <!-- History Table -->
+            <div class="overflow-x-auto rounded-lg border border-brand-cardBorder">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-brand-darkBg text-gray-400 font-semibold border-b border-brand-cardBorder uppercase tracking-wider text-[10px]">
+                        <tr>
+                            <th class="p-3">Ora Invio</th>
+                            <th class="p-3">Protocollo ERP</th>
+                            <th class="p-3">Fornitore</th>
+                            <th class="p-3">N° Doc. Fattura</th>
+                            <th class="p-3 text-right">Importo Totale</th>
+                            <th class="p-3 text-center">Stato ERP</th>
+                            <th class="p-3 text-center">Azione</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-log-body" class="divide-y divide-brand-cardBorder/60 bg-brand-darkBg/30 text-gray-300">
+                        <tr id="empty-history-row">
+                            <td colspan="7" class="p-8 text-center text-gray-500 italic">
+                                Nessuna registrazione ancora inviata all'ERP in questa sessione.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MODAL: SUCCESS CONFIRMATION MODAL -->
+    <div id="success-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-brand-cardBg border border-brand-yellow/40 rounded-xl max-w-md w-full p-6 shadow-2xl relative animate-fade-in yellow-glow">
+            
+            <div class="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center text-2xl mx-auto mb-4">
+                <i class="fa-solid fa-check"></i>
+            </div>
+
+            <h3 class="text-xl font-bold text-center text-white mb-1">Registrazione Completata!</h3>
+            <p class="text-xs text-gray-400 text-center mb-6">La scrittura di Prima Nota è stata contabilizzata nel registro IVA Acquisti con successo.</p>
+
+            <div class="bg-brand-darkBg p-4 rounded-lg border border-brand-cardBorder space-y-2 text-xs font-mono mb-6">
+                <div class="flex justify-between">
+                    <span class="text-gray-500">ID Transazione ERP:</span>
+                    <span id="modal-tx-id" class="text-brand-yellow">TX-99482018</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-500">N° Protocollo Contabile:</span>
+                    <span id="modal-protocol" class="text-white font-bold">PROT-2026/000482</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-500">Registro IVA:</span>
+                    <span class="text-gray-300">Acquisti SEZ. 01</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-500">Data Scrittura:</span>
+                    <span id="modal-entry-date" class="text-gray-300">01/10/2026 14:58</span>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3">
+                <button onclick="downloadLogFile()" class="flex-1 py-2.5 px-3 bg-brand-cardBorder hover:bg-gray-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-download"></i>
+                    <span>Scarica Log JSON</span>
+                </button>
+                <button onclick="closeModalAndReset()" class="flex-1 py-2.5 px-3 bg-brand-yellow hover:bg-brand-yellowHover text-black rounded-lg text-xs font-bold transition-colors">
+                    Prossima Fattura
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: ORIGINAL PDF PREVIEW SIMULATOR -->
+    <div id="pdf-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-brand-cardBg border border-brand-cardBorder rounded-xl max-w-2xl w-full p-6 shadow-2xl relative">
+            <div class="flex justify-between items-center mb-4 pb-3 border-b border-brand-cardBorder">
+                <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-file-pdf text-red-400"></i>
+                    <span id="pdf-modal-title">Anteprima Documento Originale</span>
+                </h3>
+                <button onclick="toggleOriginalPreview()" class="text-gray-400 hover:text-white text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="bg-white text-gray-900 p-6 rounded-lg font-sans text-xs space-y-4 max-h-[60vh] overflow-y-auto">
+                <div class="flex justify-between border-b pb-4">
+                    <div>
+                        <h1 id="pdf-view-supplier" class="text-lg font-bold">ENEL ENERGIA S.P.A.</h1>
+                        <p class="text-gray-500 text-[10px]">Via S. Giovanni, 12 - 00100 Roma (RM)<br>P.IVA 01582611009</p>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-base font-bold text-gray-800">FATTURA ELETTRONICA</span>
+                        <p class="text-gray-500 text-[10px]" id="pdf-view-docnum">Doc: FAT-2026-88912</p>
+                    </div>
+                </div>
+                <div class="p-3 bg-gray-50 rounded border flex justify-between">
+                    <div>
+                        <strong class="text-gray-600 block text-[10px] uppercase">Destinatario</strong>
+                        <span>ACME INDUSTRIAL S.R.L. - P.IVA 08827361002</span>
+                    </div>
+                    <div>
+                        <strong class="text-gray-600 block text-[10px] uppercase">Data Emissione</strong>
+                        <span id="pdf-view-date">24/09/2026</span>
+                    </div>
+                </div>
+                <table class="w-full text-left text-[11px]">
+                    <thead>
+                        <tr class="border-b bg-gray-100">
+                            <th class="p-2">Descrizione Prestazione/Bene</th>
+                            <th class="p-2 text-right">Importo Imponibile</th>
+                            <th class="p-2 text-right">IVA %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pdf-view-items">
+                        <tr>
+                            <td class="p-2">Fornitura Energia Elettrica Mese Agosto 2026</td>
+                            <td class="p-2 text-right">€ 1.188,69</td>
+                            <td class="p-2 text-right">22%</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="text-right pt-2 border-t font-bold text-sm">
+                    Totale da Pagare: <span id="pdf-view-total">€ 1.450,20</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Data presets state database
+        const PRESETS = {
+            enel: {
+                supplier: "Enel Energia SpA",
+                vat: "IT01582611009",
+                docNum: "FAT-2026-88912",
+                docDate: "24/09/2026",
+                dueDate: "30/10/2026",
+                payMode: "Bonifico SEPA / RI.BA",
+                netAmount: 1188.69,
+                vatAmount: 261.51,
+                totalAmount: 1450.20,
+                type: "Fattura Passiva (Acquisto)",
+                confidence: "98.4%",
+                supplierMatch: "Trovato (#F-0094)",
+                sdiId: "SDI-99382104",
+                aiNote: "I costi energetici sono stati attribuiti al Centro di Costo CDC-ADM (Amministrazione) sulla base dello storico delle fatture precedenti dello stesso fornitore.",
+                itemsDesc: "Fornitura Energia Elettrica Mese Agosto 2026",
+                entries: [
+                    { account: "601500", desc: "Spese Energia Elettrica Utenze", cdc: "CDC-ADM", dare: 1188.69, avere: 0, vatCode: "IVA22" },
+                    { account: "120500", desc: "IVA ns/Credito su Acquisti", cdc: "-", dare: 261.51, avere: 0, vatCode: "IVA22" },
+                    { account: "201000", desc: "Fornitori c/Anagrafica Enel SpA", cdc: "-", dare: 0, avere: 1450.20, vatCode: "-" }
+                ]
+            },
+            tech: {
+                supplier: "TechSolutions S.r.l.",
+                vat: "IT09876543210",
+                docNum: "INV-2026-0441",
+                docDate: "28/09/2026",
+                dueDate: "15/11/2026",
+                payMode: "Bonifico Bancario 30gg",
+                netAmount: 4000.00,
+                vatAmount: 880.00,
+                totalAmount: 4880.00,
+                type: "Fattura Passiva (Servizi)",
+                confidence: "99.1%",
+                supplierMatch: "Trovato (#F-0142)",
+                sdiId: "SDI-88273611",
+                aiNote: "Imputazione automatica su Conto Manutenzione Software ed Infrastruttura IT. Assegnato alla commessa sviluppo COM-2026-IT.",
+                itemsDesc: "Servizi di Consulenza Sviluppo Software e Manutenzione Cloud Q3",
+                entries: [
+                    { account: "621000", desc: "Consulenze Tecniche ed Informatiche", cdc: "COM-2026-IT", dare: 4000.00, avere: 0, vatCode: "IVA22" },
+                    { account: "120500", desc: "IVA ns/Credito su Acquisti", cdc: "-", dare: 880.00, avere: 0, vatCode: "IVA22" },
+                    { account: "201000", desc: "Fornitori c/TechSolutions Srl", cdc: "-", dare: 0, avere: 4880.00, vatCode: "-" }
+                ]
+            },
+            acciaio: {
+                supplier: "Acciaierie Lombarde SpA",
+                vat: "IT03344556677",
+                docNum: "FT-2026-90112",
+                docDate: "30/09/2026",
+                dueDate: "31/12/2026",
+                payMode: "Riba 90gg FM",
+                netAmount: 10245.90,
+                vatAmount: 2254.10,
+                totalAmount: 12500.00,
+                type: "Fattura Passiva (Materie Prime)",
+                confidence: "96.8%",
+                supplierMatch: "Trovato (#F-0012)",
+                sdiId: "SDI-11029384",
+                aiNote: "Riconosciuto lotto acquisto laminati in acciaio. Collegato al Centro di Costo Produzione (CDC-PROD) e magazzino MP-01.",
+                itemsDesc: "Fornitura Laminati e Profilati in Acciaio INOX 316L",
+                entries: [
+                    { account: "600100", desc: "Acquisti Materie Prime Metalliche", cdc: "CDC-PROD", dare: 10245.90, avere: 0, vatCode: "IVA22" },
+                    { account: "120500", desc: "IVA ns/Credito su Acquisti", cdc: "-", dare: 2254.10, avere: 0, vatCode: "IVA22" },
+                    { account: "201000", desc: "Fornitori c/Acciaierie Lombarde SpA", cdc: "-", dare: 0, avere: 12500.00, vatCode: "-" }
+                ]
+            }
+        };
+
+        // Application State
+        let currentDocument = null;
+        let processedHistory = [];
+
+        // DOM Element Cache
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const analysisLoader = document.getElementById('analysis-loader');
+        const progressBar = document.getElementById('progress-bar');
+        const analysisStep = document.getElementById('analysis-step');
+        const sectionExtracted = document.getElementById('section-extracted');
+
+        // Drag and Drop listeners
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropZone.classList.add('border-brand-yellow', 'bg-brand-darkBg');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('border-brand-yellow', 'bg-brand-darkBg');
+            });
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files.length) handleFileUpload(files[0]);
+        });
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) handleFileUpload(e.target.files[0]);
+        });
+
+        document.getElementById('btn-reset-app').addEventListener('click', () => {
+            resetDocumentArea();
+        });
+
+        function handleFileUpload(file) {
+            // Generate a random simulated preset based on uploaded filename
+            const simulatedData = {
+                supplier: "Fornitore Esterno: " + file.name.substring(0, 15),
+                vat: "IT" + Math.floor(10000000000 + Math.random() * 9000000000),
+                docNum: "DOC-" + Math.floor(1000 + Math.random() * 9000),
+                docDate: new Date().toLocaleDateString('it-IT'),
+                dueDate: "30/11/2026",
+                payMode: "Bonifico 30gg DF",
+                netAmount: 1500.00,
+                vatAmount: 330.00,
+                totalAmount: 1830.00,
+                type: "Fattura Passiva (File Caricato)",
+                confidence: "95.2%",
+                supplierMatch: "Verificare in Anagrafica",
+                sdiId: "SDI-" + Math.floor(10000000 + Math.random() * 90000000),
+                aiNote: "Estrazione dati completata dal file caricato dall'utente. Verificare i conti contabili attribuiti per conferma.",
+                itemsDesc: "Servizi e Prestazioni Generiche da File " + file.name,
+                entries: [
+                    { account: "620000", desc: "Spese e Prestazioni di Servizi Vari", cdc: "CDC-GEN", dare: 1500.00, avere: 0, vatCode: "IVA22" },
+                    { account: "120500", desc: "IVA ns/Credito su Acquisti", cdc: "-", dare: 330.00, avere: 0, vatCode: "IVA22" },
+                    { account: "201000", desc: "Fornitori Diversi", cdc: "-", dare: 0, avere: 1830.00, vatCode: "-" }
+                ]
+            };
+
+            startAnalysisAnimation(simulatedData);
+        }
+
+        function loadPreset(presetKey) {
+            if (PRESETS[presetKey]) {
+                startAnalysisAnimation(PRESETS[presetKey]);
+            }
+        }
+
+        function startAnalysisAnimation(docData) {
+            sectionExtracted.classList.add('hidden');
+            analysisLoader.classList.remove('hidden');
+            progressBar.style.width = '0%';
+
+            const steps = [
+                { percent: '25%', text: 'Scansione layout OCR ed estrazione testo...' },
+                { percent: '50%', text: 'Parsing AI intestazione, P.IVA e Totali...' },
+                { percent: '75%', text: 'Matching Anagrafica ERP e Regole Contabili...' },
+                { percent: '100%', text: 'Generazione Scrittura Prima Nota completata.' }
+            ];
+
+            let index = 0;
+            const interval = setInterval(() => {
+                if (index < steps.length) {
+                    progressBar.style.width = steps[index].percent;
+                    analysisStep.textContent = steps[index].text;
+                    index++;
+                } else {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        analysisLoader.classList.add('hidden');
+                        renderExtractedDocument(docData);
+                    }, 400);
+                }
+            }, 300);
+        }
+
+        function renderExtractedDocument(docData) {
+            currentDocument = docData;
+
+            // Fill Metadata
+            document.getElementById('doc-type-badge').textContent = docData.type;
+            document.getElementById('doc-supplier-name').textContent = docData.supplier;
+            document.getElementById('doc-supplier-vat').textContent = "P.IVA: " + docData.vat;
+            document.getElementById('doc-ai-confidence').textContent = "AI Match: " + docData.confidence;
+            document.getElementById('supplier-match-status').textContent = docData.supplierMatch;
+
+            document.getElementById('meta-doc-num').textContent = docData.docNum;
+            document.getElementById('meta-doc-date').textContent = docData.docDate;
+            document.getElementById('meta-doc-due').textContent = docData.dueDate;
+            document.getElementById('meta-doc-paymode').textContent = docData.payMode;
+            document.getElementById('meta-sdi-id').textContent = docData.sdiId;
+
+            document.getElementById('meta-net').textContent = formatCurrency(docData.netAmount);
+            document.getElementById('meta-vat').textContent = formatCurrency(docData.vatAmount);
+            document.getElementById('meta-total').textContent = formatCurrency(docData.totalAmount);
+
+            document.getElementById('ai-suggestion-text').textContent = docData.aiNote;
+
+            // Render Table Entries
+            renderEntriesTable(docData.entries);
+
+            // Reveal Section
+            sectionExtracted.classList.remove('hidden');
+            sectionExtracted.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function renderEntriesTable(entries) {
+            const tbody = document.getElementById('entries-table-body');
+            tbody.innerHTML = '';
+
+            entries.forEach((entry, idx) => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-brand-cardBorder/30 transition-colors";
+
+                tr.innerHTML = `
+                    <td class="p-2.5">
+                        <input type="text" value="${entry.account}" onchange="updateEntry(${idx}, 'account', this.value)" class="w-20 bg-brand-inputBg border border-brand-cardBorder rounded px-2 py-1 text-xs font-mono text-brand-yellow focus:outline-none focus:border-brand-yellow">
+                    </td>
+                    <td class="p-2.5">
+                        <input type="text" value="${entry.desc}" onchange="updateEntry(${idx}, 'desc', this.value)" class="w-full bg-brand-inputBg border border-brand-cardBorder rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-brand-yellow">
+                    </td>
+                    <td class="p-2.5">
+                        <input type="text" value="${entry.cdc}" onchange="updateEntry(${idx}, 'cdc', this.value)" class="w-24 bg-brand-inputBg border border-brand-cardBorder rounded px-2 py-1 text-xs font-mono text-gray-300 focus:outline-none focus:border-brand-yellow">
+                    </td>
+                    <td class="p-2.5 text-right">
+                        <input type="number" step="0.01" value="${entry.dare}" onchange="updateEntry(${idx}, 'dare', parseFloat(this.value)||0)" class="w-24 bg-brand-inputBg border border-brand-cardBorder rounded px-2 py-1 text-xs font-mono text-right text-emerald-400 focus:outline-none focus:border-brand-yellow">
+                    </td>
+                    <td class="p-2.5 text-right">
+                        <input type="number" step="0.01" value="${entry.avere}" onchange="updateEntry(${idx}, 'avere', parseFloat(this.value)||0)" class="w-24 bg-brand-inputBg border border-brand-cardBorder rounded px-2 py-1 text-xs font-mono text-right text-emerald-400 focus:outline-none focus:border-brand-yellow">
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            recalculateTotals();
+        }
+
+        function updateEntry(index, key, value) {
+            if (currentDocument && currentDocument.entries[index]) {
+                currentDocument.entries[index][key] = value;
+                recalculateTotals();
+            }
+        }
+
+        function recalculateTotals() {
+            if (!currentDocument) return;
+
+            let totalDare = 0;
+            let totalAvere = 0;
+
+            currentDocument.entries.forEach(e => {
+                totalDare += (parseFloat(e.dare) || 0);
+                totalAvere += (parseFloat(e.avere) || 0);
+            });
+
+            document.getElementById('table-total-dare').textContent = formatCurrency(totalDare);
+            document.getElementById('table-total-avere').textContent = formatCurrency(totalAvere);
+
+            const diff = Math.abs(totalDare - totalAvere);
+            const balanceBadge = document.getElementById('balance-badge');
+            const submitBtn = document.getElementById('btn-submit-erp');
+
+            if (diff < 0.01) {
+                balanceBadge.className = "inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30";
+                balanceBadge.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>Quadratura OK (€ 0,00)</span>`;
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                balanceBadge.className = "inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30";
+                balanceBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <span>Sbilancio: ${formatCurrency(diff)}</span>`;
+                submitBtn.disabled = true;
+                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        function submitToERP() {
+            if (!currentDocument) return;
+
+            // Generate Tx IDs
+            const txId = "TX-" + Math.floor(10000000 + Math.random() * 90000000);
+            const protocolNum = "PROT-2026/" + String(processedHistory.length + 1).padStart(6, '0');
+            const nowTime = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+
+            // Store in Log
+            const historyItem = {
+                time: nowTime,
+                protocol: protocolNum,
+                supplier: currentDocument.supplier,
+                docNum: currentDocument.docNum,
+                total: currentDocument.totalAmount,
+                txId: txId,
+                rawDoc: currentDocument
+            };
+
+            processedHistory.unshift(historyItem);
+
+            // Update Success Modal Data
+            document.getElementById('modal-tx-id').textContent = txId;
+            document.getElementById('modal-protocol').textContent = protocolNum;
+            document.getElementById('modal-entry-date').textContent = new Date().toLocaleString('it-IT');
+
+            // Show Success Modal
+            document.getElementById('success-modal').classList.remove('hidden');
+
+            // Render History Table
+            renderHistoryTable();
+        }
+
+        function renderHistoryTable() {
+            const tbody = document.getElementById('history-log-body');
+            const countBadge = document.getElementById('log-count-badge');
+            
+            countBadge.textContent = `${processedHistory.length} Documenti Elaborati`;
+
+            if (processedHistory.length === 0) {
+                tbody.innerHTML = `
+                    <tr id="empty-history-row">
+                        <td colspan="7" class="p-8 text-center text-gray-500 italic">
+                            Nessuna registrazione ancora inviata all'ERP in questa sessione.
+                        </td>
+                    </tr>`;
+                return;
+            }
+
+            tbody.innerHTML = '';
+            processedHistory.forEach((item) => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-brand-cardBorder/30 transition-colors font-mono text-xs";
+
+                tr.innerHTML = `
+                    <td class="p-3 text-gray-400">${item.time}</td>
+                    <td class="p-3 font-semibold text-brand-yellow">${item.protocol}</td>
+                    <td class="p-3 text-white font-sans font-medium">${item.supplier}</td>
+                    <td class="p-3 text-gray-300">${item.docNum}</td>
+                    <td class="p-3 text-right font-bold text-emerald-400">${formatCurrency(item.total)}</td>
+                    <td class="p-3 text-center">
+                        <span class="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20 text-[10px]">
+                            <i class="fa-solid fa-check text-[9px]"></i> CONTABILIZZATO
+                        </span>
+                    </td>
+                    <td class="p-3 text-center">
+                        <button onclick="copyTxInfo('${item.txId}')" class="text-xs text-gray-400 hover:text-white px-2 py-1 bg-brand-cardBorder rounded transition-colors" title="Copia ID Transazione">
+                            <i class="fa-solid fa-copy"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function closeModalAndReset() {
+            document.getElementById('success-modal').classList.add('hidden');
+            resetDocumentArea();
+        }
+
+        function resetDocumentArea() {
+            currentDocument = null;
+            sectionExtracted.classList.add('hidden');
+            fileInput.value = '';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function toggleOriginalPreview() {
+            const modal = document.getElementById('pdf-modal');
+            if (modal.classList.contains('hidden') && currentDocument) {
+                document.getElementById('pdf-view-supplier').textContent = currentDocument.supplier.toUpperCase();
+                document.getElementById('pdf-view-docnum').textContent = "Doc: " + currentDocument.docNum;
+                document.getElementById('pdf-view-date').textContent = currentDocument.docDate;
+                document.getElementById('pdf-view-total').textContent = formatCurrency(currentDocument.totalAmount);
+
+                const itemsTable = document.getElementById('pdf-view-items');
+                itemsTable.innerHTML = `
+                    <tr>
+                        <td class="p-2">${currentDocument.itemsDesc || 'Prestazioni/Forniture come da contratto'}</td>
+                        <td class="p-2 text-right">${formatCurrency(currentDocument.netAmount)}</td>
+                        <td class="p-2 text-right">22%</td>
+                    </tr>
+                `;
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function downloadLogFile() {
+            if (!currentDocument) return;
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentDocument, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `ERP_Accounting_Log_${currentDocument.docNum}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function copyTxInfo(txId) {
+            const dummy = document.createElement("textarea");
+            document.body.appendChild(dummy);
+            dummy.value = txId;
+            dummy.select();
+            document.execCommand("copy");
+            document.body.removeChild(dummy);
+            
+            // Temporary feedback notification
+            alert("ID Transazione ERP " + txId + " copiato negli appunti!");
+        }
+
+        function formatCurrency(val) {
+            return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(val);
+        }
+    </script>
+</body>
+</html>

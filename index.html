@@ -3,6 +3,730 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Smart Invoice Importer - Match Ordini & Scostamenti</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            yellow: '#F3C614',
+                            yellowHover: '#D9B00D',
+                            yellowLight: 'rgba(243, 198, 20, 0.15)',
+                            darkBg: '#121212',
+                            cardBg: '#1E1E1E',
+                            cardBorder: '#2A2A2A',
+                            inputBg: '#282828'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #121212; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #F3C614; }
+        .yellow-glow { box-shadow: 0 0 15px rgba(243, 198, 20, 0.2); }
+    </style>
+</head>
+<body class="bg-brand-darkBg text-gray-200 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-yellow selection:text-black">
+
+    <!-- Navigation Header -->
+    <header class="bg-brand-cardBg border-b border-brand-cardBorder sticky top-0 z-30 px-4 lg:px-8 py-3.5 shadow-md">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="w-9 h-9 rounded-lg bg-brand-yellow flex items-center justify-center text-black font-bold text-lg shadow-sm">
+                    <i class="fa-solid fa-file-invoice"></i>
+                </div>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <span class="font-bold text-lg tracking-tight text-white">SmartERP</span>
+                        <span class="bg-brand-yellowLight text-brand-yellow text-xs px-2 py-0.5 rounded font-mono font-medium border border-brand-yellow/30">MATCHING ORDINI v4.0</span>
+                    </div>
+                    <p class="text-xs text-gray-400 hidden sm:block">Modulo Contabile - Verifica Ordini e Controllo Scostamenti</p>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-6 text-sm">
+                <div class="hidden md:flex items-center space-x-2 bg-brand-darkBg/60 px-3 py-1.5 rounded-lg border border-brand-cardBorder">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span class="text-xs text-gray-400">Piano Conti:</span>
+                    <span class="text-xs font-semibold text-emerald-400">Piano Operativo Attivo</span>
+                </div>
+                <button id="btn-reset-app" class="px-3 py-1.5 text-xs text-gray-400 hover:text-white bg-brand-cardBorder/50 hover:bg-brand-cardBorder rounded-lg transition-colors flex items-center gap-1.5">
+                    <i class="fa-solid fa-rotate"></i>
+                    <span>Reset Demo</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-6">
+
+        <!-- SECTION 1: SYSTEM TABS CONTAINER -->
+        <section class="bg-brand-cardBg border border-brand-cardBorder rounded-xl p-6">
+            
+            <!-- Tab Buttons Header -->
+            <div class="flex border-b border-brand-cardBorder pb-3 mb-6 gap-4">
+                <button id="tab-btn-invoices" onclick="switchTab('invoices')" class="text-sm font-semibold px-4 py-2 rounded-lg bg-brand-yellow text-black flex items-center gap-2 transition-all shadow-md">
+                    <i class="fa-solid fa-receipt"></i>
+                    <span>Fatture & Controllo Scostamenti (Primo Piano)</span>
+                </button>
+                <button id="tab-btn-upload" onclick="switchTab('upload')" class="text-sm font-semibold px-4 py-2 rounded-lg bg-brand-darkBg text-gray-400 hover:text-white border border-brand-cardBorder flex items-center gap-2 transition-all">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <span>Caricamento Documento / XML Fattura (Secondo Piano)</span>
+                </button>
+            </div>
+
+            <!-- TAB 1: FATTURE IN PRIMO PIANO CON COLONNA DESCRIZIONE DELTA -->
+            <div id="tab-content-invoices" class="space-y-4">
+                <div class="flex items-center justify-between mb-2">
+                    <div>
+                        <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-traffic-light text-brand-yellow"></i>
+                            Elenco Fatture & Match Ordini ERP
+                        </h2>
+                        <p class="text-xs text-gray-400">Seleziona una fattura per elaborare la proposta di registrazione e verificare gli scostamenti con gli ordini di acquisto</p>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto rounded-lg border border-brand-cardBorder bg-brand-darkBg/50">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-brand-cardBorder/40 text-gray-400 font-semibold border-b border-brand-cardBorder uppercase tracking-wider text-[10px]">
+                            <tr>
+                                <th class="p-3 text-center">Stato</th>
+                                <th class="p-3">Ord. Rif. ERP</th>
+                                <th class="p-3">Fornitore</th>
+                                <th class="p-3">Oggetto Ordine</th>
+                                <th class="p-3 text-right">Totale Fattura</th>
+                                <th class="p-3">Descrizione Delta / Anomalia</th>
+                                <th class="p-3 text-center">Azione</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-brand-cardBorder/60">
+                            <!-- Conforme (Verde) -->
+                            <tr class="hover:bg-brand-cardBorder/30 transition-colors">
+                                <td class="p-3 text-center">
+                                    <span class="w-3 h-3 rounded-full bg-emerald-500 inline-block shadow-sm" title="Conforme"></span>
+                                </td>
+                                <td class="p-3 font-mono font-bold text-brand-yellow">OA26000013</td>
+                                <td class="p-3 font-medium text-white">Fornitore italia (FI00000001)</td>
+                                <td class="p-3 text-gray-300">ACQUISTO MATERIALE DI CONSUMO</td>
+                                <td class="p-3 text-right font-mono font-bold text-gray-200">€ 1.220,00</td>
+                                <td class="p-3 text-emerald-400 font-medium">Nessun delta rilevato. Prezzi e quantità conformi.</td>
+                                <td class="p-3 text-center">
+                                    <button onclick="loadScenario('conforme')" class="px-3 py-1.5 bg-brand-cardBorder hover:bg-emerald-600 text-white hover:text-white rounded text-xs font-medium transition-colors flex items-center gap-1 mx-auto">
+                                        <span>Elabora</span>
+                                        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                                    </button>
+                                </td>
+                            </tr>
+
+                            <!-- Tolleranza (Arancione) -->
+                            <tr class="hover:bg-brand-cardBorder/30 transition-colors">
+                                <td class="p-3 text-center">
+                                    <span class="w-3 h-3 rounded-full bg-amber-500 inline-block shadow-sm" title="Tolleranza"></span>
+                                </td>
+                                <td class="p-3 font-mono font-bold text-brand-yellow">OA26000015</td>
+                                <td class="p-3 font-medium text-white">Fornitore italia (FI00000001)</td>
+                                <td class="p-3 text-gray-300">ACQUISTO MATERIE PRIME</td>
+                                <td class="p-3 text-right font-mono font-bold text-gray-200">€ 6.313,50</td>
+                                <td class="p-3 text-amber-400 font-medium">Lieve scostamento prezzo unitario (+3.5% entro tolleranza).</td>
+                                <td class="p-3 text-center">
+                                    <button onclick="loadScenario('tolleranza')" class="px-3 py-1.5 bg-brand-cardBorder hover:bg-amber-600 text-white rounded text-xs font-medium transition-colors flex items-center gap-1 mx-auto">
+                                        <span>Elabora</span>
+                                        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                                    </button>
+                                </td>
+                            </tr>
+
+                            <!-- Anomalia (Rosso) -->
+                            <tr class="hover:bg-brand-cardBorder/30 transition-colors">
+                                <td class="p-3 text-center">
+                                    <span class="w-3 h-3 rounded-full bg-rose-500 inline-block shadow-sm" title="Anomalia Critica"></span>
+                                </td>
+                                <td class="p-3 font-mono font-bold text-brand-yellow">OA26000016</td>
+                                <td class="p-3 font-medium text-white">Fornitore italia (FI00000001)</td>
+                                <td class="p-3 text-gray-300">ACQUISTO MATERIALE DI CONSUMO</td>
+                                <td class="p-3 text-right font-mono font-bold text-gray-200">€ 3.660,00</td>
+                                <td class="p-3 text-rose-400 font-medium">Scostamento quantità +50% ed errato conto contabile.</td>
+                                <td class="p-3 text-center">
+                                    <button onclick="loadScenario('anomalia')" class="px-3 py-1.5 bg-brand-cardBorder hover:bg-rose-600 text-white rounded text-xs font-medium transition-colors flex items-center gap-1 mx-auto">
+                                        <span>Elabora</span>
+                                        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TAB 2: CARICAMENTO DOCUMENTO IN SECONDO PIANO (NATIVE HIDDEN) -->
+            <div id="tab-content-upload" class="hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-cloud-arrow-up text-brand-yellow"></i>
+                        Caricamento Documento / XML Fattura
+                    </h2>
+                    <span class="text-xs text-gray-400">Ordini Aperti: Fornitore Italia (FI00000001)</span>
+                </div>
+
+                <div id="drop-zone" class="border-2 border-dashed border-gray-700 hover:border-brand-yellow rounded-xl p-8 text-center cursor-pointer transition-all duration-200 bg-brand-darkBg/40 hover:bg-brand-darkBg/80 group flex flex-col items-center justify-center min-h-[180px]">
+                    <input type="file" id="file-input" class="hidden" accept=".pdf,.xml,.p7m,.jpg,.png">
+                    <div class="w-14 h-14 rounded-full bg-brand-cardBorder group-hover:bg-brand-yellowLight text-gray-400 group-hover:text-brand-yellow flex items-center justify-center mb-3 transition-colors">
+                        <i class="fa-solid fa-file-pdf text-2xl"></i>
+                    </div>
+                    <p class="text-sm font-medium text-gray-200 group-hover:text-white">
+                        Trascina qui la tua fattura o <span class="text-brand-yellow underline underline-offset-2">sfoglia i file</span>
+                    </p>
+                    <p class="text-xs text-gray-500 mt-1">Confronto automatico con Registro Ordini ERP</p>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- LOADER -->
+        <section id="analysis-loader" class="hidden bg-brand-cardBg border border-brand-yellow/30 rounded-xl p-8 text-center yellow-glow">
+            <div class="max-w-md mx-auto space-y-4">
+                <div class="w-12 h-12 border-4 border-brand-yellow border-t-transparent rounded-full animate-spin mx-auto"></div>
+                <div>
+                    <h3 class="text-lg font-semibold text-white">Analisi Fattura e Match Ordini ERP...</h3>
+                    <p id="analysis-step" class="text-xs text-gray-400 mt-1">Verifica Fornitore FI00000001 e righe d'ordine...</p>
+                </div>
+                <div class="w-full bg-brand-darkBg rounded-full h-2 overflow-hidden border border-brand-cardBorder">
+                    <div id="progress-bar" class="bg-brand-yellow h-full transition-all duration-300 w-0"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2: MATCHING RESULT & CONTROLS -->
+        <section id="section-extracted" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Left: Document & Order Comparison Details -->
+            <div class="lg:col-span-5 bg-brand-cardBg border border-brand-cardBorder rounded-xl p-6 flex flex-col justify-between">
+                <div>
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <span id="doc-type-badge" class="bg-blue-500/20 text-blue-400 text-[11px] font-semibold px-2.5 py-1 rounded border border-blue-500/30 uppercase">Fattura Passiva</span>
+                            <h2 id="doc-supplier-name" class="text-xl font-bold text-white mt-2">Fornitore italia</h2>
+                            <p id="doc-supplier-vat" class="text-xs font-mono text-gray-400">Codice ERP: FI00000001</p>
+                        </div>
+
+                        <!-- Traffic Light Semaphore Badge -->
+                        <div id="traffic-light-badge" class="flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-bold">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Matching Box Info -->
+                    <div class="bg-brand-darkBg/60 p-3.5 rounded-lg border border-brand-cardBorder space-y-2 mb-4 text-xs">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Ordine ERP Collegato:</span>
+                            <span id="match-order-num" class="font-mono text-brand-yellow font-bold">OA26000013</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Data Ordine:</span>
+                            <span id="match-order-date" class="font-mono text-gray-300">14/05/2026</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Oggetto Ordine:</span>
+                            <span id="match-order-desc" class="text-gray-200 font-medium">ACQUISTO MATERIALE DI CONSUMO</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Stato Stampa Ordine:</span>
+                            <span id="match-order-status" class="font-mono text-emerald-400">STAMPATO A</span>
+                        </div>
+                    </div>
+
+                    <!-- Financial Summary Breakdown -->
+                    <div class="space-y-2 border-t border-brand-cardBorder pt-3 text-xs">
+                        <div class="flex justify-between text-gray-400">
+                            <span>Imponibile Fattura:</span>
+                            <span id="meta-net" class="font-mono text-gray-200">€ 1.000,00</span>
+                        </div>
+                        <div class="flex justify-between text-gray-400">
+                            <span>IVA 22% (Conto 1033002):</span>
+                            <span id="meta-vat" class="font-mono text-gray-200">€ 220,00</span>
+                        </div>
+                        <div class="flex justify-between text-sm font-bold text-white pt-2 border-t border-brand-cardBorder/50">
+                            <span>Totale Fattura:</span>
+                            <span id="meta-total" class="font-mono text-brand-yellow">€ 1.220,00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Discrepancy Alert Box -->
+                <div id="discrepancy-alert-box" class="mt-4 p-3 rounded-lg text-xs border">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+            <!-- Right: Prima Nota Proposal (Piano dei Conti) -->
+            <div class="lg:col-span-7 bg-brand-cardBg border border-brand-cardBorder rounded-xl p-6 flex flex-col justify-between">
+                <div>
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                        <div>
+                            <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-list-check text-brand-yellow"></i>
+                                Scrittura Prima Nota (Piano dei Conti)
+                            </h2>
+                            <p class="text-xs text-gray-400">Codici agganciati dal Piano dei Conti ERP</p>
+                        </div>
+                        
+                        <div id="balance-badge" class="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            <i class="fa-solid fa-circle-check"></i>
+                            <span>Quadratura OK (€ 0,00)</span>
+                        </div>
+                    </div>
+
+                    <!-- Accounting Entries Table -->
+                    <div class="overflow-x-auto rounded-lg border border-brand-cardBorder bg-brand-darkBg/60">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-brand-cardBorder/40 text-gray-400 font-semibold border-b border-brand-cardBorder uppercase tracking-wider text-[10px]">
+                                <tr>
+                                    <th class="p-2.5">Cod. Conto</th>
+                                    <th class="p-2.5">Descrizione Conto ERP</th>
+                                    <th class="p-2.5 text-right">DARE (€)</th>
+                                    <th class="p-2.5 text-right">AVERE (€)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="entries-table-body" class="divide-y divide-brand-cardBorder/50 text-gray-300 font-mono">
+                                <!-- Dynamic rows -->
+                            </tbody>
+                            <tfoot class="bg-brand-cardBg/90 font-bold border-t border-brand-cardBorder text-xs">
+                                <tr>
+                                    <td colspan="2" class="p-2.5 text-right text-gray-400">Totali Sezioni:</td>
+                                    <td id="table-total-dare" class="p-2.5 text-right text-emerald-400 font-mono">€ 0,00</td>
+                                    <td id="table-total-avere" class="p-2.5 text-right text-emerald-400 font-mono">€ 0,00</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    <!-- AI Suggerimento -->
+                    <div class="mt-4 p-3 bg-brand-yellowLight/40 border border-brand-yellow/30 rounded-lg text-xs flex items-start space-x-2.5">
+                        <i class="fa-solid fa-lightbulb text-brand-yellow mt-0.5 text-sm"></i>
+                        <div class="text-gray-300">
+                            <span class="font-semibold text-brand-yellow">Note Modulo Registrazione:</span> 
+                            <span id="ai-suggestion-text">Scrittura generata automaticamente abbinando l'ordine di acquisto selezionato.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="mt-6 pt-4 border-t border-brand-cardBorder flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div class="flex items-center space-x-2 text-xs text-gray-400">
+                        <i class="fa-solid fa-database text-gray-500"></i>
+                        <span>Esercizio: <strong class="text-white">2026</strong></span>
+                        <span class="text-gray-600">|</span>
+                        <span>Sezionale: <strong class="text-white">ACQ-01</strong></span>
+                    </div>
+
+                    <button id="btn-submit-erp" onclick="submitToERP()" class="w-full sm:w-auto px-6 py-3 bg-brand-yellow hover:bg-brand-yellowHover text-black font-bold rounded-lg shadow-lg hover:shadow-brand-yellow/20 transition-all flex items-center justify-center space-x-2 text-sm">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        <span>CONFERMA E REGISTRA IN ERP</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: STORICO REGISTRAZIONI -->
+        <section class="bg-brand-cardBg border border-brand-cardBorder rounded-xl p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-clock-rotate-left text-brand-yellow"></i>
+                        Storico Registrazioni Sessione
+                    </h2>
+                    <p class="text-xs text-gray-400">Fatture e Scritture contabilizzate a sistema</p>
+                </div>
+                <span id="log-count-badge" class="bg-brand-cardBorder text-gray-300 text-xs px-2.5 py-1 rounded-full font-mono">0 Registrazioni</span>
+            </div>
+
+            <div class="overflow-x-auto rounded-lg border border-brand-cardBorder">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-brand-darkBg text-gray-400 font-semibold border-b border-brand-cardBorder uppercase tracking-wider text-[10px]">
+                        <tr>
+                            <th class="p-3">Ora Invio</th>
+                            <th class="p-3">Ord. Rif.</th>
+                            <th class="p-3">Protocollo ERP</th>
+                            <th class="p-3">Fornitore</th>
+                            <th class="p-3 text-right">Importo Totale</th>
+                            <th class="p-3 text-center">Esito Controllo</th>
+                            <th class="p-3 text-center">Stato</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-log-body" class="divide-y divide-brand-cardBorder/60 bg-brand-darkBg/30 text-gray-300">
+                        <tr id="empty-history-row">
+                            <td colspan="7" class="p-8 text-center text-gray-500 italic">
+                                Nessuna registrazione ancora inviata all'ERP in questa sessione.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MODAL SUCCESS -->
+    <div id="success-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-brand-cardBg border border-brand-yellow/40 rounded-xl max-w-md w-full p-6 shadow-2xl relative yellow-glow">
+            <div class="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center text-2xl mx-auto mb-4">
+                <i class="fa-solid fa-check"></i>
+            </div>
+            <h3 class="text-xl font-bold text-center text-white mb-1">Registrazione Completata!</h3>
+            <p class="text-xs text-gray-400 text-center mb-6">La scrittura di Prima Nota è stata registrata con successo sull'ordine di acquisto correlato.</p>
+
+            <div class="bg-brand-darkBg p-4 rounded-lg border border-brand-cardBorder space-y-2 text-xs font-mono mb-6">
+                <div class="flex justify-between">
+                    <span class="text-gray-500">ID Transazione ERP:</span>
+                    <span id="modal-tx-id" class="text-brand-yellow">TX-99482018</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-500">N° Protocollo Contabile:</span>
+                    <span id="modal-protocol" class="text-white font-bold">PROT-2026/000001</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-500">Ordine Chiuso:</span>
+                    <span id="modal-order-ref" class="text-emerald-400 font-bold">OA26000013</span>
+                </div>
+            </div>
+
+            <button onclick="closeModalAndReset()" class="w-full py-2.5 px-3 bg-brand-yellow hover:bg-brand-yellowHover text-black rounded-lg text-xs font-bold transition-colors">
+                Elabora Prossima Fattura
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Scenarios based on account plan and attached Orders
+        const SCENARIOS = {
+            conforme: {
+                title: "Fattura Conforme OA26000013",
+                orderNum: "OA26000013",
+                orderDate: "14/05/2026",
+                orderDesc: "ACQUISTO MATERIALE DI CONSUMO",
+                orderStatus: "STAMPATO A",
+                supplier: "Fornitore italia",
+                supplierCode: "FI00000001",
+                docNum: "FT-2026-00101",
+                docDate: "16/05/2026",
+                netAmount: 1000.00,
+                vatAmount: 220.00,
+                totalAmount: 1220.00,
+                status: "green",
+                statusLabel: "VERDE - Conforme",
+                alertTitle: "🟢 Nessuno Scostamento Rilevato",
+                alertDesc: "I prezzi unitari, la quantità ed il conto contabile (4001003 - Acquisti materiali di consumo) coincidono perfettamente con l'ordine OA26000013.",
+                aiNote: "Registrazione automatica pronta per l'invio al mastro contabile senza necessità di approvazione manuale.",
+                entries: [
+                    { account: "4001003", desc: "Acquisti materiali di consumo", dare: 1000.00, avere: 0 },
+                    { account: "1033002", desc: "IVA c/acquisti", dare: 220.00, avere: 0 },
+                    { account: "FI00000001:EUR", desc: "Fornitore italia/EURO", dare: 0, avere: 1220.00 }
+                ]
+            },
+            tolleranza: {
+                title: "Lieve Scostamento OA26000015",
+                orderNum: "OA26000015",
+                orderDate: "14/07/2026",
+                orderDesc: "ACQUISTO MATERIE PRIME",
+                orderStatus: "DA STAMPAR B",
+                supplier: "Fornitore italia",
+                supplierCode: "FI00000001",
+                docNum: "FT-2026-00342",
+                docDate: "20/07/2026",
+                netAmount: 5175.00,
+                vatAmount: 1138.50,
+                totalAmount: 6313.50,
+                status: "orange",
+                statusLabel: "ARANCIONE - Tolleranza",
+                alertTitle: "🟠 Scostamento di Prezzo Rilevato (+3.5%)",
+                alertDesc: "L'importo netto in fattura (€ 5.175,00) supera l'importo dell'ordine OA26000015 (€ 5.000,00) di € 175,00 (+3.5%). Rientra nella soglia di tolleranza aziendale (5%).",
+                aiNote: "Si consiglia la verifica del responsabile acquisti prima della chiusura definitiva della scheda ordine.",
+                entries: [
+                    { account: "4001001", desc: "Acquisti materiale di produzioneZZ", dare: 5175.00, avere: 0 },
+                    { account: "1033002", desc: "IVA c/acquisti", dare: 1138.50, avere: 0 },
+                    { account: "FI00000001:EUR", desc: "Fornitore italia/EURO", dare: 0, avere: 6313.50 }
+                ]
+            },
+            anomalia: {
+                title: "Anomalia Critica OA26000016",
+                orderNum: "OA26000016",
+                orderDate: "16/07/2026",
+                orderDesc: "ACQUISTO MATERIALE DI CONSUMO",
+                orderStatus: "DA STAMPAR A",
+                supplier: "Fornitore italia",
+                supplierCode: "FI00000001",
+                docNum: "FT-2026-00899",
+                docDate: "22/07/2026",
+                netAmount: 3000.00,
+                vatAmount: 660.00,
+                totalAmount: 3660.00,
+                status: "red",
+                statusLabel: "ROSSO - Blocco Critico",
+                alertTitle: "🔴 Anomalia Bloccante: Prezzo ed Imputazione Errata",
+                alertDesc: "1. Scostamento del +50% rispetto all'ordine OA26000016 (€ 3.000,00 vs € 2.000,00).\n2. Il fornitore ha indicato in fattura 'Semilavorati', difforme da Materiale di Consumo.",
+                aiNote: "Registrazione bloccata. È richiesta la revisione contabile manuale e l'emissione di una nota di credito o autorizzazione direzione.",
+                entries: [
+                    { account: "4001006", desc: "Acquisti semilavorati (DIFFORME)", dare: 3000.00, avere: 0 },
+                    { account: "1033002", desc: "IVA c/acquisti", dare: 660.00, avere: 0 },
+                    { account: "FI00000001:EUR", desc: "Fornitore italia/EURO", dare: 0, avere: 3660.00 }
+                ]
+            }
+        };
+
+        let currentDocument = null;
+        let processedHistory = [];
+
+        // Tab Switcher Functionality
+        function switchTab(tabName) {
+            const btnInvoices = document.getElementById('tab-btn-invoices');
+            const btnUpload = document.getElementById('tab-btn-upload');
+            const contentInvoices = document.getElementById('tab-content-invoices');
+            const contentUpload = document.getElementById('tab-content-upload');
+
+            if (tabName === 'invoices') {
+                btnInvoices.className = "text-sm font-semibold px-4 py-2 rounded-lg bg-brand-yellow text-black flex items-center gap-2 transition-all shadow-md";
+                btnUpload.className = "text-sm font-semibold px-4 py-2 rounded-lg bg-brand-darkBg text-gray-400 hover:text-white border border-brand-cardBorder flex items-center gap-2 transition-all";
+                contentInvoices.classList.remove('hidden');
+                contentUpload.classList.add('hidden');
+            } else {
+                btnUpload.className = "text-sm font-semibold px-4 py-2 rounded-lg bg-brand-yellow text-black flex items-center gap-2 transition-all shadow-md";
+                btnInvoices.className = "text-sm font-semibold px-4 py-2 rounded-lg bg-brand-darkBg text-gray-400 hover:text-white border border-brand-cardBorder flex items-center gap-2 transition-all";
+                contentUpload.classList.remove('hidden');
+                contentInvoices.classList.add('hidden');
+            }
+        }
+
+        // DOM elements
+        const analysisLoader = document.getElementById('analysis-loader');
+        const progressBar = document.getElementById('progress-bar');
+        const analysisStep = document.getElementById('analysis-step');
+        const sectionExtracted = document.getElementById('section-extracted');
+
+        function loadScenario(scenarioKey) {
+            if (SCENARIOS[scenarioKey]) {
+                startAnalysisAnimation(SCENARIOS[scenarioKey]);
+            }
+        }
+
+        function startAnalysisAnimation(docData) {
+            sectionExtracted.classList.add('hidden');
+            analysisLoader.classList.remove('hidden');
+            progressBar.style.width = '0%';
+
+            const steps = [
+                { percent: '30%', text: 'Estrazione dati fattura ed identificazione P.IVA...' },
+                { percent: '65%', text: 'Ricerca Ordine di Acquisto aperto per FI00000001...' },
+                { percent: '85%', text: 'Calcolo scostamento prezzi/quantità e verifica limiti...' },
+                { percent: '100%', text: 'Generazione proposta di scrittura contabile completata.' }
+            ];
+
+            let index = 0;
+            const interval = setInterval(() => {
+                if (index < steps.length) {
+                    progressBar.style.width = steps[index].percent;
+                    analysisStep.textContent = steps[index].text;
+                    index++;
+                } else {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        analysisLoader.classList.add('hidden');
+                        renderExtractedDocument(docData);
+                    }, 300);
+                }
+            }, 250);
+        }
+
+        function renderExtractedDocument(docData) {
+            currentDocument = docData;
+
+            // Header Supplier info
+            document.getElementById('doc-supplier-name').textContent = docData.supplier;
+            document.getElementById('doc-supplier-vat').textContent = "Codice ERP: " + docData.supplierCode;
+
+            // Order details
+            document.getElementById('match-order-num').textContent = docData.orderNum;
+            document.getElementById('match-order-date').textContent = docData.orderDate;
+            document.getElementById('match-order-desc').textContent = docData.orderDesc;
+            document.getElementById('match-order-status').textContent = docData.orderStatus;
+
+            // Amounts
+            document.getElementById('meta-net').textContent = formatCurrency(docData.netAmount);
+            document.getElementById('meta-vat').textContent = formatCurrency(docData.vatAmount);
+            document.getElementById('meta-total').textContent = formatCurrency(docData.totalAmount);
+
+            // Traffic Light Badge
+            const badge = document.getElementById('traffic-light-badge');
+            const alertBox = document.getElementById('discrepancy-alert-box');
+            const submitBtn = document.getElementById('btn-submit-erp');
+
+            if (docData.status === 'green') {
+                badge.className = "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40";
+                badge.innerHTML = `<i class="fa-solid fa-circle text-[10px]"></i> CONFORME`;
+                
+                alertBox.className = "mt-4 p-3 rounded-lg text-xs bg-emerald-500/10 border border-emerald-500/30 text-emerald-300";
+                alertBox.innerHTML = `<strong class="block font-semibold mb-0.5">${docData.alertTitle}</strong>${docData.alertDesc}`;
+                
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            } 
+            else if (docData.status === 'orange') {
+                badge.className = "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40";
+                badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-[10px]"></i> TOLLERANZA`;
+                
+                alertBox.className = "mt-4 p-3 rounded-lg text-xs bg-amber-500/10 border border-amber-500/30 text-amber-300";
+                alertBox.innerHTML = `<strong class="block font-semibold mb-0.5">${docData.alertTitle}</strong>${docData.alertDesc}`;
+                
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            } 
+            else { // RED
+                badge.className = "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-500/20 text-rose-400 border border-rose-500/40";
+                badge.innerHTML = `<i class="fa-solid fa-ban text-[10px]"></i> BLOCCO ANOMALIA`;
+                
+                alertBox.className = "mt-4 p-3 rounded-lg text-xs bg-rose-500/10 border border-rose-500/30 text-rose-300";
+                alertBox.innerHTML = `<strong class="block font-semibold mb-0.5">${docData.alertTitle}</strong>${docData.alertDesc}`;
+                
+                submitBtn.disabled = true;
+                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+
+            document.getElementById('ai-suggestion-text').textContent = docData.aiNote;
+
+            // Render Entries Table
+            renderEntriesTable(docData.entries);
+
+            sectionExtracted.classList.remove('hidden');
+            sectionExtracted.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function renderEntriesTable(entries) {
+            const tbody = document.getElementById('entries-table-body');
+            tbody.innerHTML = '';
+
+            let totalDare = 0;
+            let totalAvere = 0;
+
+            entries.forEach((entry) => {
+                totalDare += entry.dare;
+                totalAvere += entry.avere;
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-brand-cardBorder/30 transition-colors";
+                tr.innerHTML = `
+                    <td class="p-2.5 font-bold text-brand-yellow">${entry.account}</td>
+                    <td class="p-2.5 text-gray-200">${entry.desc}</td>
+                    <td class="p-2.5 text-right text-emerald-400">${entry.dare > 0 ? formatCurrency(entry.dare) : '-'}</td>
+                    <td class="p-2.5 text-right text-emerald-400">${entry.avere > 0 ? formatCurrency(entry.avere) : '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('table-total-dare').textContent = formatCurrency(totalDare);
+            document.getElementById('table-total-avere').textContent = formatCurrency(totalAvere);
+        }
+
+        function submitToERP() {
+            if (!currentDocument) return;
+
+            const txId = "TX-" + Math.floor(10000000 + Math.random() * 90000000);
+            const protocolNum = "PROT-2026/" + String(processedHistory.length + 1).padStart(6, '0');
+            const nowTime = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+
+            processedHistory.unshift({
+                time: nowTime,
+                orderRef: currentDocument.orderNum,
+                protocol: protocolNum,
+                supplier: currentDocument.supplier,
+                total: currentDocument.totalAmount,
+                status: currentDocument.status,
+                txId: txId
+            });
+
+            document.getElementById('modal-tx-id').textContent = txId;
+            document.getElementById('modal-protocol').textContent = protocolNum;
+            document.getElementById('modal-order-ref').textContent = currentDocument.orderNum;
+
+            document.getElementById('success-modal').classList.remove('hidden');
+            renderHistoryTable();
+        }
+
+        function renderHistoryTable() {
+            const tbody = document.getElementById('history-log-body');
+            const countBadge = document.getElementById('log-count-badge');
+            
+            countBadge.textContent = `${processedHistory.length} Registrazioni`;
+
+            if (processedHistory.length === 0) return;
+
+            tbody.innerHTML = '';
+            processedHistory.forEach((item) => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-brand-cardBorder/30 transition-colors font-mono text-xs";
+
+                let statusBadge = "";
+                if (item.status === 'green') {
+                    statusBadge = `<span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px]">🟢 Conforme</span>`;
+                } else if (item.status === 'orange') {
+                    statusBadge = `<span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px]">🟠 Tolleranza</span>`;
+                } else {
+                    statusBadge = `<span class="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/30 text-[10px]">🔴 Forzato</span>`;
+                }
+
+                tr.innerHTML = `
+                    <td class="p-3 text-gray-400">${item.time}</td>
+                    <td class="p-3 text-brand-yellow font-bold">${item.orderRef}</td>
+                    <td class="p-3 font-semibold text-white">${item.protocol}</td>
+                    <td class="p-3 text-gray-300 font-sans">${item.supplier}</td>
+                    <td class="p-3 text-right font-bold text-emerald-400">${formatCurrency(item.total)}</td>
+                    <td class="p-3 text-center">${statusBadge}</td>
+                    <td class="p-3 text-center">
+                        <span class="text-emerald-400 text-[10px] font-bold"><i class="fa-solid fa-check"></i> ERP OK</span>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function closeModalAndReset() {
+            document.getElementById('success-modal').classList.add('hidden');
+            sectionExtracted.classList.add('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        document.getElementById('btn-reset-app').addEventListener('click', () => {
+            sectionExtracted.classList.add('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+
+        function formatCurrency(val) {
+            return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(val);
+        }
+    </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="it" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ERP Smart Invoice Importer - Modulo Contabile AI</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
